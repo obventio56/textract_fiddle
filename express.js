@@ -1,7 +1,7 @@
 import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
-import { getOCRDocument } from "./index.js";
+import { getOCRDocument, getQueryResponses } from "./index.js";
 import {
   S3Client,
   CreateMultipartUploadCommand,

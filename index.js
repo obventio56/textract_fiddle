@@ -51,7 +51,7 @@ const exampleShape = {
 
 // const res = await uploadFileFromByteString(base64ByteString, "image/jpeg");
 
-const getQueryResponses = async (text, shape) => {
+export const getQueryResponses = async (text, shape) => {
   const res = await chatAPI(
     [
       {
