@@ -12,6 +12,7 @@ import {
 } from "@aws-sdk/client-s3";
 import multer from "multer";
 import { v4 } from "uuid";
+import mime from "mime-types";
 
 const app = express();
 
@@ -64,13 +65,16 @@ app.post("/documents", upload.array("documents"), async (req, res) => {
 
   for (let file of files) {
     const fileExtension = file.originalname.split(".").pop();
-    const key = `${v4()}.${fileExtension}`;
+    const key = `${uuidv4()}.${fileExtension}`;
+    const contentType =
+      mime.lookup(fileExtension) || "application/octet-stream";
 
     try {
       const { UploadId } = await s3Client.send(
         new CreateMultipartUploadCommand({
           Bucket: bucketName,
           Key: key,
+          ContentType: contentType,
         })
       );
 
