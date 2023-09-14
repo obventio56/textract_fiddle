@@ -81,9 +81,9 @@ app.post("/documents", upload.array("documents"), async (req, res) => {
       const uploadPromises = [];
 
       for (let i = 0; i < numParts; i++) {
-        const start = i * partSize;
+        const start = i * fivemb;
         const end =
-          start + partSize >= buffer.length ? buffer.length : start + partSize;
+          start + fivemb >= buffer.length ? buffer.length : start + fivemb;
 
         uploadPromises.push(
           s3Client.send(
