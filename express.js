@@ -65,7 +65,7 @@ app.post("/documents", upload.array("documents"), async (req, res) => {
 
   for (let file of files) {
     const fileExtension = file.originalname.split(".").pop();
-    const key = `${uuidv4()}.${fileExtension}`;
+    const key = `${v4()}.${fileExtension}`;
     const contentType =
       mime.lookup(fileExtension) || "application/octet-stream";
 
