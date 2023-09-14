@@ -140,19 +140,29 @@ app.post("/documents", upload.array("documents"), async (req, res) => {
 });
 
 app.post("/getLayout", async (req, res) => {
-  const { key: s3FileId } = req.body;
-  const text = await getOCRDocument(s3FileId);
+  try {
+    const { key: s3FileId } = req.body;
+    const text = await getOCRDocument(s3FileId);
 
-  // Your logic for getLayout
-  res.json({ textLayout: text });
+    // Your logic for getLayout
+    res.json({ textLayout: text });
+  } catch (e) {
+    console.error(e);
+    res.status(500).send({ error: "Failed to get layout." });
+  }
 });
 
 app.post("/extract", async (req, res) => {
-  const { shape, textLayout } = req.body;
-  const args = await getQueryResponses(textLayout, shape);
+  try {
+    const { shape, textLayout } = req.body;
+    const args = await getQueryResponses(textLayout, shape);
 
-  // Your logic for extract
-  res.json({ results: args });
+    // Your logic for extract
+    res.json({ results: args });
+  } catch (e) {
+    console.error(e);
+    res.status(500).send({ error: "Failed to extract." });
+  }
 });
 
 // Global Error Handling
