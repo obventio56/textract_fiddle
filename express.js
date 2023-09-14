@@ -25,6 +25,8 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 },
 }); // 50mb
 
+const fivemb = 5 * 1024 * 1024;
+
 const s3Client = new S3Client({});
 const bucketName = "unstructured-api-images"; // Replace with your bucket name
 
@@ -73,12 +75,15 @@ app.post("/documents", upload.array("documents"), async (req, res) => {
       );
 
       const buffer = file.buffer;
-      const partSize = Math.ceil(buffer.length / 11);
+
+      // Split the file into 5mb chunks
+      const numParts = Math.ceil(buffer.length / fivemb);
       const uploadPromises = [];
 
-      for (let i = 0; i < 11; i++) {
+      for (let i = 0; i < numParts; i++) {
         const start = i * partSize;
-        const end = start + partSize;
+        const end =
+          start + partSize >= buffer.length ? buffer.length : start + partSize;
 
         uploadPromises.push(
           s3Client.send(
