@@ -45,7 +45,7 @@ const getOCRForJob = async (fileId, jobId) => {
   await supabase.from("jobs").update({ state: job.state }).eq("id", jobId);
 };
 
-const getExtractionForJob = async (fileId, jobId, textLayout) => {
+const getExtractionForJob = async (fileId, jobId, shape, textLayout) => {
   if (!textLayout) {
     throw new Error("No text layout for file");
   }
@@ -109,6 +109,7 @@ export const processJob = async (jobId) => {
         extractChunk.map((fileId) =>
           getExtractionForJob(
             fileId,
+            jobId,
             postOCRJob.state.shape,
             postOCRJob.state.results.textLayouts[fileId]
           )
