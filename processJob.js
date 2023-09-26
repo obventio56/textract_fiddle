@@ -68,50 +68,57 @@ const getExtractionForJob = async (fileId, jobId, textLayout) => {
 };
 
 export const processJob = async (jobId) => {
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_PUBLIC_ANON_KEY
-  );
-
-  // Get job from supabase
-  const res = await supabase.from("jobs").select().eq("id", jobId);
-  const initialJob = res.data[0];
-  if (!initialJob) {
-    throw new Error("Job not found");
-  }
-
-  // Set status to processing
-  await supabase.from("jobs").update({ status: "PROCESSING" }).eq("id", jobId);
-
-  // Get documents that still need OCR
-  const fileIdsForOCR = initialJob.state.fileIds.filter(
-    (fid) => !initialJob.state.results.textLayouts[fid]
-  );
-  const chunkedFileIdsForOCR = chunkArray(fileIdsForOCR, 100);
-  for (const ocrChunk of chunkedFileIdsForOCR) {
-    await Promise.all(ocrChunk.map((fileId) => getOCRForJob(fileId, jobId)));
-  }
-
-  // Get state after all OCR
-  const postOCRRes = await supabase.from("jobs").select().eq("id", jobId);
-  const postOCRJob = postOCRRes.data[0];
-
-  const fileIdsForExtraction = postOCRJob.state.fileIds.filter(
-    (fid) => !postOCRJob.state.results.extractionResults[fid]
-  );
-  const chunkedFileIdsForExtraction = chunkArray(fileIdsForExtraction, 10);
-  for (const extractChunk of chunkedFileIdsForExtraction) {
-    await Promise.all(
-      extractChunk.map((fileId) =>
-        getExtractionForJob(
-          fileId,
-          shape,
-          postOCRJob.state.results.textLayouts[fileId]
-        )
-      )
+  try {
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_PUBLIC_ANON_KEY
     );
-  }
 
-  // Final state update to READY
-  await supabase.from("jobs").update({ status: "READY" }).eq("id", jobId);
+    // Get job from supabase
+    const res = await supabase.from("jobs").select().eq("id", jobId);
+    const initialJob = res.data[0];
+    if (!initialJob) {
+      throw new Error("Job not found");
+    }
+
+    // Set status to processing
+    await supabase
+      .from("jobs")
+      .update({ status: "PROCESSING" })
+      .eq("id", jobId);
+
+    // Get documents that still need OCR
+    const fileIdsForOCR = initialJob.state.fileIds.filter(
+      (fid) => !initialJob.state.results.textLayouts[fid]
+    );
+    const chunkedFileIdsForOCR = chunkArray(fileIdsForOCR, 100);
+    for (const ocrChunk of chunkedFileIdsForOCR) {
+      await Promise.all(ocrChunk.map((fileId) => getOCRForJob(fileId, jobId)));
+    }
+
+    // Get state after all OCR
+    const postOCRRes = await supabase.from("jobs").select().eq("id", jobId);
+    const postOCRJob = postOCRRes.data[0];
+
+    const fileIdsForExtraction = postOCRJob.state.fileIds.filter(
+      (fid) => !postOCRJob.state.results.extractionResults[fid]
+    );
+    const chunkedFileIdsForExtraction = chunkArray(fileIdsForExtraction, 10);
+    for (const extractChunk of chunkedFileIdsForExtraction) {
+      await Promise.all(
+        extractChunk.map((fileId) =>
+          getExtractionForJob(
+            fileId,
+            postOCRJob.state.shape,
+            postOCRJob.state.results.textLayouts[fileId]
+          )
+        )
+      );
+    }
+
+    // Final state update to READY
+    await supabase.from("jobs").update({ status: "READY" }).eq("id", jobId);
+  } catch (e) {
+    console.log("error", e);
+  }
 };
