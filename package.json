@@ -6,7 +6,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.410.0",
     "@aws-sdk/client-textract": "^3.409.0",
-    "@supabase/supabase-js": "^2.33.2",
+    "@supabase/supabase-js": "^2.36.0",
     "@types/mathjs": "^9.4.2",
     "axios": "^1.5.0",
     "body-parser": "^1.20.2",

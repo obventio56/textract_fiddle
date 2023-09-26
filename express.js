@@ -13,6 +13,8 @@ import {
 import multer from "multer";
 import { v4 } from "uuid";
 import mime from "mime-types";
+import "dotenv/config";
+import { createClient } from "@supabase/supabase-js";
 
 const app = express();
 
@@ -162,6 +164,27 @@ app.post("/extract", async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).send({ error: "Failed to extract." });
+  }
+});
+
+app.post("/job", async (req, res) => {
+  try {
+    const { shape, fileIds } = req.body;
+
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_PUBLIC_ANON_KEY
+    );
+
+    const record = await supabase
+      .from("jobs")
+      .insert({ state: { shape, fileIds } })
+      .select();
+
+    res.json({ jobId: record.data[0].id });
+  } catch (e) {
+    console.error(e);
+    res.status(500).send({ error: "Failed to create job." });
   }
 });
 
