@@ -27,44 +27,18 @@ function chunkArray(array, chunkSize) {
  *
  */
 
-const getOCRForJob = async (fileId, jobId) => {
+const getOCRForJob = async (fileId) => {
   const textLayout = await getOCRDocument(fileId);
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_PUBLIC_ANON_KEY
-  );
-
-  // Get current state
-  const res = await supabase.from("jobs").select().eq("id", jobId);
-  const job = res.data[0];
-
-  // Set text layout
-  job.state.results.textLayouts[fileId] = textLayout;
-
-  // Update state
-  await supabase.from("jobs").update({ state: job.state }).eq("id", jobId);
+  return { [fileId]: textLayout };
 };
 
-const getExtractionForJob = async (fileId, jobId, shape, textLayout) => {
+const getExtractionForJob = async (fileId, shape, textLayout) => {
   if (!textLayout) {
     throw new Error("No text layout for file");
   }
 
   const args = await getQueryResponses(textLayout, shape);
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_PUBLIC_ANON_KEY
-  );
-
-  // Get current state
-  const res = await supabase.from("jobs").select().eq("id", jobId);
-  const job = res.data[0];
-
-  // Set extraction results
-  job.state.results.extractionResults[fileId] = args;
-
-  // Update state
-  await supabase.from("jobs").update({ state: job.state }).eq("id", jobId);
+  return { [fileId]: args };
 };
 
 export const processJob = async (jobId) => {
@@ -92,8 +66,37 @@ export const processJob = async (jobId) => {
       (fid) => !initialJob.state.results.textLayouts[fid]
     );
     const chunkedFileIdsForOCR = chunkArray(fileIdsForOCR, 100);
+
     for (const ocrChunk of chunkedFileIdsForOCR) {
-      await Promise.all(ocrChunk.map((fileId) => getOCRForJob(fileId, jobId)));
+      // Wait for all docs in this chunk to return
+      const ocrResults = await Promise.all(
+        ocrChunk.map((fileId) => getOCRForJob(fileId))
+      );
+
+      // Get current job state
+      const currentJobRes = await supabase
+        .from("jobs")
+        .select()
+        .eq("id", jobId);
+      const currentJobState = currentJobRes.data[0].state;
+      const currentTextLayouts = currentJobState.results.textLayouts;
+
+      // Compute new state by merging all OCR results with old state
+      const newTextLayouts = ocrResults.reduce((cum, res) => {
+        return {
+          ...cum,
+          ...res,
+        };
+      }, currentTextLayouts);
+
+      const newJobState = currentJobState;
+      newJobState.results.textLayouts = newTextLayouts;
+
+      // Update state
+      await supabase
+        .from("jobs")
+        .update({ state: newJobState })
+        .eq("id", jobId);
     }
 
     // Get state after all OCR
@@ -104,17 +107,44 @@ export const processJob = async (jobId) => {
       (fid) => !postOCRJob.state.results.extractionResults[fid]
     );
     const chunkedFileIdsForExtraction = chunkArray(fileIdsForExtraction, 10);
+
     for (const extractChunk of chunkedFileIdsForExtraction) {
-      await Promise.all(
+      // Wait for all docs in this chunk to return
+      const extractionResults = await Promise.all(
         extractChunk.map((fileId) =>
           getExtractionForJob(
             fileId,
-            jobId,
             postOCRJob.state.shape,
             postOCRJob.state.results.textLayouts[fileId]
           )
         )
       );
+
+      // Get current job state
+      const currentJobRes = await supabase
+        .from("jobs")
+        .select()
+        .eq("id", jobId);
+      const currentJobState = currentJobRes.data[0].state;
+      const currentExtractionResults =
+        currentJobState.results.extractionResults;
+
+      // Compute new state by merging all OCR results with old state
+      const newExtractionResults = extractionResults.reduce((cum, res) => {
+        return {
+          ...cum,
+          ...res,
+        };
+      }, currentExtractionResults);
+
+      const newJobState = currentJobState;
+      newJobState.results.extractionResults = newExtractionResults;
+
+      // Update state
+      await supabase
+        .from("jobs")
+        .update({ state: newJobState })
+        .eq("id", jobId);
     }
 
     // Final state update to READY
