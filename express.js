@@ -178,7 +178,13 @@ app.post("/job", async (req, res) => {
 
     const record = await supabase
       .from("jobs")
-      .insert({ state: { shape, fileIds } })
+      .insert({
+        state: {
+          shape,
+          fileIds,
+          results: { textLayouts: {}, extractionResults: {} },
+        },
+      })
       .select();
 
     res.json({ jobId: record.data[0].id });
