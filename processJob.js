@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { getOCRDocument, getQueryResponses } from "index.js";
+import { getOCRDocument, getQueryResponses } from "./index.js";
 
 function chunkArray(array, chunkSize) {
   // Initialize an empty array to hold the chunks

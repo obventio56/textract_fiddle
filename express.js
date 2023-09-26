@@ -15,6 +15,7 @@ import { v4 } from "uuid";
 import mime from "mime-types";
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
+import { processJob } from "./processJob.js";
 
 const app = express();
 
@@ -188,6 +189,8 @@ app.post("/job", async (req, res) => {
       .select();
 
     res.json({ jobId: record.data[0].id });
+
+    await processJob(record.data[0].id);
   } catch (e) {
     console.error(e);
     res.status(500).send({ error: "Failed to create job." });
