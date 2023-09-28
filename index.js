@@ -49,9 +49,30 @@ const exampleShape = {
   },
 };
 
+const formatJSON = (json, shape) => {
+  // This should ensure the order of the keys is the same as the shape
+  return Object.entries(shape).reduce((acc, [key, value]) => {
+    // If it's an array, we need to map over it
+    if (Array.isArray(json[key])) {
+      return {
+        ...acc,
+        [key]: json[key].map((item) =>
+          formatJSON(item, value.items.properties)
+        ),
+      };
+    }
+
+    // Otherwise just return the value
+    return {
+      ...acc,
+      [key]: json[key],
+    };
+  }, {});
+};
+
 // const res = await uploadFileFromByteString(base64ByteString, "image/jpeg");
 
-export const getQueryResponses = async (text, shape, jsonError = "") => {
+export const getQueryResponses = async (text, shape) => {
   const res = await chatAPI(
     [
       {
@@ -83,11 +104,18 @@ ${text}
   );
 
   const args = res.choices?.[0]?.message?.["function_call"]?.arguments;
+
   if (!args) {
     console.log("No arguments found");
-    return;
+    return { error: "No arguments found", rawResponse: "" };
   }
-  return args;
+
+  try {
+    const rawJSON = JSON.parse(args);
+    return formatJSON(rawJSON, shape);
+  } catch (e) {
+    return { error: "Error parsing argument JSON", rawResponse: args };
+  }
 };
 
 // This must be terrible but let's try it.
