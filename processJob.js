@@ -28,17 +28,27 @@ function chunkArray(array, chunkSize) {
  */
 
 const getOCRForJob = async (fileId) => {
-  const textLayout = await getOCRDocument(fileId);
-  return { [fileId]: textLayout };
+  try {
+    const textLayout = await getOCRDocument(fileId);
+    return { [fileId]: textLayout };
+  } catch (e) {
+    console.log("error", e);
+    return { [fileId]: { error: e.message } };
+  }
 };
 
 const getExtractionForJob = async (fileId, shape, textLayout) => {
-  if (!textLayout) {
-    throw new Error("No text layout for file");
+  if (!textLayout || !!textLayout.error) {
+    return { [fileId]: { error: "No text layout for file" } };
   }
 
-  const args = await getQueryResponses(textLayout, shape);
-  return { [fileId]: args };
+  try {
+    const args = await getQueryResponses(textLayout, shape);
+    return { [fileId]: args };
+  } catch (e) {
+    console.log("error", e);
+    return { [fileId]: { error: e.message } };
+  }
 };
 
 export const processJob = async (jobId) => {
