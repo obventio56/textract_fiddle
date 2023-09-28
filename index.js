@@ -65,7 +65,7 @@ const formatJSON = (json, shape) => {
     // Otherwise just return the value
     return {
       ...acc,
-      [key]: json[key],
+      [key]: json[key] || null,
     };
   }, {});
 };
