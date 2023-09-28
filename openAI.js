@@ -26,7 +26,12 @@ const guardTokenLimit = (model, prompt) => {
   }
 };
 
-const chatAPI = async (messages, functions, model = "gpt-4") => {
+const chatAPI = async (
+  messages,
+  functions,
+  model = "gpt-4",
+  allowedAttempts = 1
+) => {
   // Ensure prompt length is within model limits
   guardTokenLimit(model, JSON.stringify({ messages, functions }));
 
@@ -41,17 +46,29 @@ const chatAPI = async (messages, functions, model = "gpt-4") => {
     messages,
   };
 
-  try {
-    const response = await axios.post(
-      `${OPEN_AI_API_URL}/v1/chat/completions`,
-      payload,
-      { headers }
-    );
-    const assistantMessage = response.data;
-    return assistantMessage || "No response from API.";
-  } catch (error) {
-    console.error("Error calling OpenAI API:", error);
-    throw error;
+  let attempts = 0;
+  while (true) {
+    try {
+      const response = await axios.post(
+        `${OPEN_AI_API_URL}/v1/chat/completions`,
+        payload,
+        { headers }
+      );
+      const assistantMessage = response.data;
+
+      // If we succeed, just return
+      return assistantMessage || "No response from API.";
+    } catch (error) {
+      attempts++;
+
+      // If we've exceeded our attempts, throw the error
+      if (attempts === allowedAttempts) {
+        throw error;
+      }
+
+      // Otherwise, keep trying
+      console.log(error, "Retrying...");
+    }
   }
 };
 

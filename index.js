@@ -74,35 +74,43 @@ const formatJSON = (json, shape) => {
 // const res = await uploadFileFromByteString(base64ByteString, "image/jpeg");
 
 export const getQueryResponses = async (text, shape) => {
-  const res = await chatAPI(
-    [
-      {
-        role: "system",
-        content: `You are an expert at data entry and document analysis helping me correctly extract, classify, and summarize information from documents to call an external API.
-You will be given a plain-text representation of a document that was created using OCR. We have done our best to maintain layout and formatting in the plain-text representation, but it may not be perfect.
-Your job is to use the provided document to call an external API via the callAPI function. You must extract all the information necessary to call the function. You may also be required to produce summaries and classifications in order to call the function.
-If you cannot find an answer or piece of information, it is ok to return null.`,
-      },
-      {
-        role: "user",
-        content: `Here is a plain-text representation of a document. Use this to call the callAPI function.
-Document:
-${text}
-    `,
-      },
-    ],
-    [
-      {
-        name: "callAPI",
-        description: "Call external api with data extract from document",
-        parameters: {
-          type: "object",
-          // Convert shape to parameter format
-          properties: shape,
+  let res;
+  try {
+    res = await chatAPI(
+      [
+        {
+          role: "system",
+          content: `You are an expert at data entry and document analysis helping me correctly extract, classify, and summarize information from documents to call an external API.
+  You will be given a plain-text representation of a document that was created using OCR. We have done our best to maintain layout and formatting in the plain-text representation, but it may not be perfect.
+  Your job is to use the provided document to call an external API via the callAPI function. You must extract all the information necessary to call the function. You may also be required to produce summaries and classifications in order to call the function.
+  If you cannot find an answer or piece of information, it is ok to return null.`,
         },
-      },
-    ]
-  );
+        {
+          role: "user",
+          content: `Here is a plain-text representation of a document. Use this to call the callAPI function.
+  Document:
+  ${text}
+      `,
+        },
+      ],
+      [
+        {
+          name: "callAPI",
+          description: "Call external api with data extract from document",
+          parameters: {
+            type: "object",
+            // Convert shape to parameter format
+            properties: shape,
+          },
+        },
+      ],
+      "gpt-4", // Use gpt-4
+      2 // Allow 2 attempts
+    );
+  } catch (e) {
+    console.log("Error calling API", e);
+    return { error: "Error calling API", rawResponse: "" };
+  }
 
   const args = res.choices?.[0]?.message?.["function_call"]?.arguments;
 
