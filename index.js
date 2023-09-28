@@ -52,11 +52,12 @@ const exampleShape = {
 const formatJSON = (json, shape) => {
   // This should ensure the order of the keys is the same as the shape
   return Object.entries(shape).reduce((acc, [key, value]) => {
-    // If it's an array, we need to map over it
-    if (Array.isArray(json[key])) {
+    // If it's expected to be an array, we need to map over it
+    // If there are no values, we need to return an empty array
+    if (value.type === "array") {
       return {
         ...acc,
-        [key]: json[key].map((item) =>
+        [key]: (json[key] || []).map((item) =>
           formatJSON(item, value.items.properties)
         ),
       };
