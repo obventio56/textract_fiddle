@@ -65,7 +65,7 @@ export const processJob = async (jobId) => {
     const fileIdsForOCR = initialJob.state.fileIds.filter(
       (fid) => !initialJob.state.results.textLayouts[fid]
     );
-    const chunkedFileIdsForOCR = chunkArray(fileIdsForOCR, 50);
+    const chunkedFileIdsForOCR = chunkArray(fileIdsForOCR, 15);
 
     for (const ocrChunk of chunkedFileIdsForOCR) {
       // Wait for all docs in this chunk to return
