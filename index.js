@@ -12,7 +12,7 @@ import { uploadFileFromByteString, uploadFileFromUrl } from "./s3.js";
 import { createClient } from "@supabase/supabase-js";
 import axios from "axios";
 import { readFileSync } from "fs";
-const client = new TextractClient();
+const client = new TextractClient({ maxAttempts: 3 });
 
 const BUCKET_NAME = "unstructured-api-images";
 
@@ -214,7 +214,7 @@ export const getOCRDocument = async (fileKey) => {
 
   console.log("Starting document analysis");
   const command = new StartDocumentAnalysisCommand(input);
-  const { JobId: jobId } = await client.send(command);
+  const { JobId: jobId } = await client.send(command, {});
   console.log(jobId);
   const blocks = await awaitOCRResult(jobId);
   const text = await bb2Layout({ Blocks: blocks });
