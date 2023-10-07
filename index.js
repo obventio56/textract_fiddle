@@ -12,9 +12,20 @@ import { uploadFileFromByteString, uploadFileFromUrl } from "./s3.js";
 import { createClient } from "@supabase/supabase-js";
 import axios from "axios";
 import { readFileSync } from "fs";
+import { ComputerVisionClient } from "@azure/cognitiveservices-computervision";
+import { ApiKeyCredentials } from "@azure/ms-rest-js";
 const client = new TextractClient({ maxAttempts: 3 });
-
 const BUCKET_NAME = "unstructured-api-images";
+
+// A public URL for downloading files by S3 key
+const fileDownloadUrlPrefix = `${process.env.PROD_URL}/downloadDocument?key=`;
+
+const computerVisionClient = new ComputerVisionClient(
+  new ApiKeyCredentials({
+    inHeader: { "Ocp-Apim-Subscription-Key": process.env.AZURE_VISION_KEY },
+  }),
+  process.env.AZURE_VISION_ENDPOINT
+);
 
 // const res = await uploadFileFromUrl(
 //   "https://drive.google.com/uc?export=download&id=1eMiMjPlqIcAnwPT6gc71ImOhO3Snm59o"
@@ -47,6 +58,10 @@ const exampleShape = {
       },
     },
   },
+};
+
+const sleep = (ms) => {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
 const formatJSON = (json, shape) => {
@@ -169,47 +184,58 @@ const awaitOCRResult = (jobId) => {
   });
 };
 
-// Get text in approximate plain text layout from document in S3
-export const getOCRDocument = async (fileKey) => {
+/**
+ * Normalize all line coordinates from Azure response to be between 0 and 1
+ * Also switch to AWS Polygon convention for lines
+ */
+const normalizeAzureCoordinates = (azureResponse) => {
+  return azureResponse.readResults.reduce((cum, page) => {
+    const pageWidth = page.width;
+    const pageHeight = page.height;
+
+    const lines = page.lines.map((line) => {
+      const boundingBox = line.boundingBox;
+
+      const normalizedBoundingBox = [
+        { X: boundingBox[0] / pageWidth, Y: boundingBox[1] / pageHeight },
+        { X: boundingBox[2] / pageWidth, Y: boundingBox[3] / pageHeight },
+        { X: boundingBox[4] / pageWidth, Y: boundingBox[5] / pageHeight },
+        { X: boundingBox[6] / pageWidth, Y: boundingBox[7] / pageHeight },
+      ];
+
+      return {
+        text: line.text,
+        Polygon: normalizedBoundingBox,
+      };
+    });
+
+    return [...cum, { page: page.page, lines }];
+  }, []);
+};
+
+export const getAzureOCRResponse = async (fileUrl) => {
+  let result = await computerVisionClient.read(fileUrl);
+  // Operation ID is last path segment of operationLocation (a URL)
+  let operation = result.operationLocation.split("/").slice(-1)[0];
+
+  // Wait for read recognition to complete
+  // result.status is initially undefined, since it's the result of read
+  while (result.status !== "succeeded") {
+    await sleep(1000);
+    result = await computerVisionClient.getReadResult(operation);
+  }
+  return normalizeAzureCoordinates(result.analyzeResult);
+};
+
+export const getAWSOCRResponse = async (fileKey) => {
   const input = {
-    // AnalyzeDocumentRequest
     DocumentLocation: {
-      // Document
-      // Bytes: testImage,
       S3Object: {
-        // S3Object
-        Bucket: BUCKET_NAME, // required
+        Bucket: BUCKET_NAME,
         Name: fileKey,
       },
     },
     FeatureTypes: ["TABLES"],
-    //   HumanLoopConfig: {
-    //     // HumanLoopConfig
-    //     HumanLoopName: "STRING_VALUE", // required
-    //     FlowDefinitionArn: "STRING_VALUE", // required
-    //     DataAttributes: {
-    //       // HumanLoopDataAttributes
-    //       ContentClassifiers: [
-    //         // ContentClassifiers
-    //         "FreeOfPersonallyIdentifiableInformation" || "FreeOfAdultContent",
-    //       ],
-    //     },
-    //   },
-    //   QueriesConfig: {
-    //     // QueriesConfig
-    //     Queries: [
-    //       // Queries // required
-    //       {
-    //         // Query
-    //         Text: "STRING_VALUE", // required
-    //         Alias: "STRING_VALUE",
-    //         Pages: [
-    //           // QueryPages
-    //           "STRING_VALUE",
-    //         ],
-    //       },
-    //     ],
-    //   },
   };
 
   console.log("Starting document analysis");
@@ -217,7 +243,17 @@ export const getOCRDocument = async (fileKey) => {
   const { JobId: jobId } = await client.send(command, {});
   console.log(jobId);
   const blocks = await awaitOCRResult(jobId);
-  const text = await bb2Layout({ Blocks: blocks });
+  return blocks;
+};
+
+// Get text in approximate plain text layout from document in S3
+export const getOCRDocument = async (fileKey) => {
+  const [awsResponse, azureResponse] = await Promise.all([
+    getAWSOCRResponse(fileKey),
+    getAzureOCRResponse(fileDownloadUrlPrefix + fileKey),
+  ]);
+
+  const text = await bb2Layout(awsResponse, azureResponse);
   return text;
 };
 
