@@ -31,21 +31,19 @@ function transformPoint(point, H) {
   };
 }
 
-const bb2Layout = async (document) => {
-  writeFileSync("example.json", JSON.stringify(document, null, 2));
+const bb2Layout = async (awsResponse, azureResponse) => {
+  const pages = awsResponse
+    .filter((block) => block.BlockType === "PAGE")
+    .reduce((cum, page) => {
+      return [...cum, { ...page, lines: [] }];
+    }, []);
 
-  const pages = document.Blocks.filter(
-    (block) => block.BlockType === "PAGE"
-  ).map((p) => [p]);
-
-  const lines = document.Blocks.filter(
-    (block) => !!block.Text && block.BlockType === "LINE"
-  );
-
-  // Sort lines into pages
-  for (const line of lines) {
-    pages[line["Page"] - 1].push(line);
+  for (const page of azureResponse) {
+    pages.find((p) => p.Page === page.page).lines = page.lines;
   }
+
+  // Sort pages by Page
+  pages.sort((a, b) => a.Page - b.Page);
 
   const pageTexts = await Promise.all(pages.map(processPage));
   const text = pageTexts.reduce((cum, pageText, idx) => {
@@ -60,21 +58,18 @@ const bb2Layout = async (document) => {
  * This is relative to the "top" of the document based on the orientation of the text.
  * Since this is true we can map the points to a standard rectangle.
  */
-const processPage = async (document) => {
+const processPage = async (page) => {
   // TODO: What if there's more than one page
-  const page = document.find((block) => block.BlockType === "PAGE");
   const homography = await computeHomography(page.Geometry.Polygon);
 
-  const lines = document.filter(
-    (block) => !!block.Text && block.BlockType === "LINE"
-  );
+  const lines = page.lines;
 
   for (const line of lines) {
-    const transformedPolygon = line.Geometry.Polygon.map((p) =>
+    const transformedPolygon = line.Polygon.map((p) =>
       transformPoint(p, homography)
     );
 
-    line.Geometry.TransformedBoundingBox = {
+    line.TransformedBoundingBox = {
       Top: (transformedPolygon[0].Y + transformedPolygon[1].Y) / 2,
       Height: Math.abs(transformedPolygon[0].Y - transformedPolygon[3].Y),
       Left: (transformedPolygon[0].X + transformedPolygon[3].X) / 2,
@@ -82,9 +77,7 @@ const processPage = async (document) => {
     };
   }
 
-  const heights = lines.map(
-    (element) => element.Geometry.TransformedBoundingBox.Height
-  );
+  const heights = lines.map((element) => element.TransformedBoundingBox.Height);
   const binnedHeights = optimalKMeansCluster(heights);
 
   // Find the largest member of the bin with the most members
@@ -98,18 +91,16 @@ const processPage = async (document) => {
 
   // Sort lines by top, ascending
   lines.sort(
-    (a, b) =>
-      a.Geometry.TransformedBoundingBox.Top -
-      b.Geometry.TransformedBoundingBox.Top
+    (a, b) => a.TransformedBoundingBox.Top - b.TransformedBoundingBox.Top
   );
 
   // Bin elements into lines
   const lineBins = [];
   let currentLine = [];
-  let currentLineY = lines[0].Geometry.TransformedBoundingBox.Top;
+  let currentLineY = lines[0].TransformedBoundingBox.Top;
   for (let i = 0; i < lines.length; i++) {
     const element = lines[i];
-    const elementY = element.Geometry.TransformedBoundingBox.Top;
+    const elementY = element.TransformedBoundingBox.Top;
 
     if (Math.abs(elementY - currentLineY) > lineHeight) {
       lineBins.push(currentLine);
@@ -127,18 +118,16 @@ const processPage = async (document) => {
   // Sort each line by x, ascending. Then convert to text.
   const linesWithText = lineBins.map((line) => {
     const sortedLine = line.sort(
-      (a, b) =>
-        a.Geometry.TransformedBoundingBox.Left -
-        b.Geometry.TransformedBoundingBox.Left
+      (a, b) => a.TransformedBoundingBox.Left - b.TransformedBoundingBox.Left
     );
 
     const totalWidth = sortedLine.reduce(
       (totalWidth, element) =>
-        totalWidth + element.Geometry.TransformedBoundingBox.Width,
+        totalWidth + element.TransformedBoundingBox.Width,
       0
     );
     const totalChars = sortedLine.reduce(
-      (totalChars, element) => totalChars + element.Text.length,
+      (totalChars, element) => totalChars + element.text.length,
       0
     );
 
@@ -148,12 +137,12 @@ const processPage = async (document) => {
     const text = sortedLine.reduce((text, element, index) => {
       const nextElement = sortedLine[index + 1];
       const gap = nextElement
-        ? nextElement.Geometry.TransformedBoundingBox.Left -
-          element.Geometry.TransformedBoundingBox.Left -
-          element.Geometry.TransformedBoundingBox.Width
+        ? nextElement.TransformedBoundingBox.Left -
+          element.TransformedBoundingBox.Left -
+          element.TransformedBoundingBox.Width
         : 0;
 
-      return text + element.Text + (gap > averageCharWidth * 2 ? "\t" : " ");
+      return text + element.text + (gap > averageCharWidth * 2 ? "\t" : " ");
     }, "");
     return text;
   });
