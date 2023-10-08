@@ -64,6 +64,10 @@ const processPage = async (page) => {
 
   const lines = page.lines;
 
+  if (!lines) {
+    return "EMPTY PAGE";
+  }
+
   for (const line of lines) {
     const transformedPolygon = line.Polygon.map((p) =>
       transformPoint(p, homography)
