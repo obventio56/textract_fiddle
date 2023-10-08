@@ -61,8 +61,9 @@ const chatAPI = async (
     } catch (error) {
       attempts++;
 
+      console.log(attempts, allowedAttempts);
       // If we've exceeded our attempts, throw the error
-      if (attempts === allowedAttempts) {
+      if (attempts >= allowedAttempts) {
         throw error;
       }
 
