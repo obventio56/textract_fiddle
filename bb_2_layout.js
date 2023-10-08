@@ -64,8 +64,6 @@ const processPage = async (page) => {
 
   const lines = page.lines;
 
-  console.log(lines);
-
   if (lines.length === 0) {
     return "EMPTY PAGE";
   }
