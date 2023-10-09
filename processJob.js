@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { getOCRDocument, getQueryResponses } from "./index.js";
+import { getExtraction, getOCRDocument } from "./index.js";
 
 export function chunkArray(array, chunkSize) {
   // Initialize an empty array to hold the chunks
@@ -43,7 +43,7 @@ const getExtractionForJob = async (fileId, shape, textLayout) => {
   }
 
   try {
-    const args = await getQueryResponses(textLayout, shape);
+    const args = await getExtraction(textLayout, shape);
     return { [fileId]: args };
   } catch (e) {
     console.log("error", e);

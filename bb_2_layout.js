@@ -30,6 +30,12 @@ function transformPoint(point, H) {
   };
 }
 
+export const joinPages = (pageTexts) => {
+  return pageTexts.reduce((cum, pageText, idx) => {
+    return cum + `\n ------ BEGIN PAGE ${idx + 1} ------ \n` + pageText;
+  }, "");
+};
+
 const bb2Layout = async (awsResponse, azureResponse, returnPages = false) => {
   const pages = awsResponse
     .filter((block) => block.BlockType === "PAGE")
@@ -51,11 +57,7 @@ const bb2Layout = async (awsResponse, azureResponse, returnPages = false) => {
     return pageTexts;
   }
 
-  const text = pageTexts.reduce((cum, pageText, idx) => {
-    return cum + `\n ------ BEGIN PAGE ${idx + 1} ------ \n` + pageText;
-  }, "");
-
-  return text;
+  return joinPages(pageTexts);
 };
 
 /**

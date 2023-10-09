@@ -1,35 +1,32 @@
 import {
   TextractClient,
-  AnalyzeDocumentCommand,
   StartDocumentAnalysisCommand,
   GetDocumentAnalysisCommand,
 } from "@aws-sdk/client-textract"; // ES Modules import
-import { filter, re } from "mathjs";
 // import { readFileSync, writeFileSync } from "fs";
 import { bb2Layout } from "./bb_2_layout.js";
 import { chatAPI } from "./openAI.js";
 import { uploadFileFromByteString, uploadFileFromUrl } from "./s3.js";
 import { createClient } from "@supabase/supabase-js";
 import axios from "axios";
-import { readFileSync } from "fs";
 import { ComputerVisionClient } from "@azure/cognitiveservices-computervision";
 import { ApiKeyCredentials } from "@azure/ms-rest-js";
+
+// A public URL for downloading files by S3 key
+export const fileDownloadUrlPrefix = `${process.env.PROD_URL}/downloadDocument?key=`;
+export const fileUploadUrl = `${process.env.PROD_URL}/documents`;
+
+// AWS client info
 const client = new TextractClient({ maxAttempts: 3 });
 const BUCKET_NAME = "unstructured-api-images";
 
-// A public URL for downloading files by S3 key
-const fileDownloadUrlPrefix = `${process.env.PROD_URL}/downloadDocument?key=`;
-
+// Azure client info
 const computerVisionClient = new ComputerVisionClient(
   new ApiKeyCredentials({
     inHeader: { "Ocp-Apim-Subscription-Key": process.env.AZURE_VISION_KEY },
   }),
   process.env.AZURE_VISION_ENDPOINT
 );
-
-// const res = await uploadFileFromUrl(
-//   "https://drive.google.com/uc?export=download&id=1eMiMjPlqIcAnwPT6gc71ImOhO3Snm59o"
-// );
 
 const exampleShape = {
   total: {
@@ -81,18 +78,15 @@ export const formatJSON = (json, shape, defaultValue = "NOT FOUND") => {
     // Otherwise just return the value
     return {
       ...acc,
-      [key]: json[key] || defaultValue,
+      [key]: json[key] || (json[key] === false ? false : defaultValue),
     };
   }, {});
 };
 
-// const res = await uploadFileFromByteString(base64ByteString, "image/jpeg");
-
 /**
- * Do a first pass of each property in the shape and ask ChatGPT if it's present in the text.
- * Return a filtered shape with only the properties that are present.
+ * Function calling with system prompt to determine whether or not each property is present
  */
-export const getFilteredShape = async (text, shape) => {
+const getShapeWithPresence = async (text, shape) => {
   // Convert each property in shape into a boolean type and adjust description to ask whether or not this property exists
   // For array, flatten the properties and construct a prompt asking if sub properties exist
   const translatedShape = Object.entries(shape).reduce((cum, [key, value]) => {
@@ -229,38 +223,12 @@ export const getFilteredShape = async (text, shape) => {
   return shapeWithPresence;
 };
 
+/**
+ * Function calling with system prompt to extract values from a text layout
+ */
 export const getQueryResponses = async (text, shape) => {
-  // Filter shape so that it only contains properties that are present
-  // Also remove presence property from shape
-  const filteredShape = Object.entries(shape).reduce((cum, [key, value]) => {
-    if (value.type === "array") {
-      // Check all properties in items
-      const filteredProperties = Object.entries(value.items.properties).reduce(
-        (subCum, [subKey, subValue]) => {
-          if (subValue.presence) {
-            return {
-              ...subCum,
-              [subKey]: subValue,
-            };
-          }
-          return subCum;
-        }
-      );
-    }
-
-    if (value.presence) {
-      return {
-        ...cum,
-        [key]: value,
-      };
-    }
-
-    return cum;
-  }, {});
-
-  // If there are no properties present, return empty object
-  if (Object.keys(filteredShape).length === 0) {
-    return formatJSON({}, shape);
+  if (Object.keys(shape).length === 0) {
+    throw new Error("Attempted to get query response with empty shape");
   }
 
   let res;
@@ -288,8 +256,7 @@ export const getQueryResponses = async (text, shape) => {
           description: "Call external api with data extract from document",
           parameters: {
             type: "object",
-            // Convert shape to parameter format
-            properties: filteredShape,
+            properties: shape,
           },
         },
       ],
@@ -310,12 +277,76 @@ export const getQueryResponses = async (text, shape) => {
 
   try {
     const rawJSON = JSON.parse(args);
-
-    // This will add back all original properties. Properties not in filtered shape will be null.
     return formatJSON(rawJSON, shape);
   } catch (e) {
     return { error: "Error parsing argument JSON", rawResponse: args };
   }
+};
+
+/**
+ * Combines getShapeWithPresence and getQueryResponses to extract values from a text layout
+ * while allowing certain properties to be missing.
+ */
+export const getExtraction = async (text, shape) => {
+  // Returns shape with an extra property on each argument indicating whether or not it is present
+  const shapeWithPresence = await getShapeWithPresence(text, shape);
+
+  const filteredShape = Object.entries(shapeWithPresence).reduce(
+    (cum, [key, value]) => {
+      // If it's an array of objects, we check that each property of the object is present
+      if (value.type === "array" && value.items.type === "object") {
+        if (!value.presence) {
+          return cum;
+        }
+
+        // Check all properties in items
+        const filteredProperties = Object.entries(
+          value.items.properties
+        ).reduce((subCum, [subKey, subValue]) => {
+          if (!subValue.presence) {
+            return subCum;
+          }
+          return {
+            ...subCum,
+            [subKey]: subValue,
+          };
+        });
+
+        return {
+          ...cum,
+          [key]: {
+            ...value,
+            items: {
+              ...value.items,
+              properties: filteredProperties,
+            },
+          },
+        };
+      }
+
+      // Otherwise, just check that the parent property is present
+      if (value.presence) {
+        return {
+          ...cum,
+          [key]: value,
+        };
+      }
+
+      return cum;
+    },
+    {}
+  );
+
+  // If no properties are present, return empty object formatted to shape
+  if (Object.keys(filteredShape).length === 0) {
+    return formatJSON({}, shape);
+  }
+
+  // Extract values that are indicated as present
+  const presentArgs = await getQueryResponses(text, filteredShape);
+
+  // Use format json to add back any non-present properties as null
+  return formatJSON(presentArgs, shape);
 };
 
 // This must be terrible but let's try it.

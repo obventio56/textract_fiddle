@@ -1,100 +1,168 @@
 import { createClient } from "@supabase/supabase-js";
 import { chunkArray, getOCRForJob } from "./processJob.js";
-import { chatAPI } from "./openAI.js";
-import { formatJSON } from "./index.js";
+import {
+  fileDownloadUrlPrefix,
+  fileUploadUrl,
+  getQueryResponses,
+} from "./index.js";
+import { joinPages } from "./bb_2_layout.js";
+import { v4 } from "uuid";
+import axios from "axios";
+import { PDFDocument } from "pdf-lib";
 
-const firstPassClassificationShape = {
-  documentType: {
-    type: "string",
-    description: `Which option best describes the type of bill or invoice document/documents represented in the text. 
-      Here are the definitions of each type of document:
-        bill - A bill document that does not contain all the details of an invoice. This type of document likely does not contain an invoice number but may contain some other type of unique id.
-        invoice - A formal invoice document that contains an invoice id, an order number and other details.
-        other - Some other type of document that is not a bill or invoice.`,
-    enum: ["bill", "invoice", "other"],
-  },
-  moreThanOne: {
+const multiInvoicesPerDocumentShape = {
+  hasMultipleInvoices: {
     type: "boolean",
-    description: `If there is more than one bill/invoice document represented the text, select true. Otherwise, select false.`,
+    description:
+      "Return true if the provided text layout contains more than one invoice or bill document. Otherwise, return false. A key indicator of multiple invoices is the presence of multiple invoice numbers.",
   },
-};
-
-const singelOrMultiPOInvoiceShape = {
-  poNumbers: {
+  invoiceDetails: {
     type: "array",
-    description: `All purchase order numbers (also could be referred to as PO numbers, order numbers, or the equivalent in a foreign language) present in this invoice. There is an edge case that some invoices might include PO numbers used internally by the supplier. These might be marked "ours." You should ignore these PO numbers, but include all others.`,
+    description:
+      "Details about each invoice or bill in the document. If there is only one invoice/bill in the document, return an array with one item.",
     items: {
-      type: "string",
+      type: "object",
+      properties: {
+        invoiceNumber: {
+          type: "string",
+          description:
+            "The unique identifier for this invoice or bill. This is often called the invoice number or bill number. If no invoice number is present, return an index or random uuid.",
+        },
+        invoiceStartPage: {
+          type: "number",
+          description:
+            "The page number of the first page that contains information about this invoice or bill.",
+        },
+        invoiceEndPage: {
+          type: "number",
+          description:
+            "The page number of the last page that contains information about this invoice or bill.",
+        },
+      },
     },
   },
 };
 
-const classifyInvoiceDocuments = async (text, shape) => {
-  let res;
-  try {
-    res = await chatAPI(
-      [
-        {
-          role: "system",
-          content: `You are polyglot and expert international accountant accountant specializing in accounts payable. You are going to help me do classification and preprocessing of receipt and invoice documents in order to determine how to call an API for further processing.
-          You will be given a plain-text representation of an invoice, receipt, or other bill document that was created using OCR. We have done our best to maintain layout and formatting in the plain-text representation, but it may not be perfect.
-          Additionally, not all documents will be in English. Your job is to use your expertise and language ability to extract and classify information from the document, no matter its language. 
-          Your job is to use the provided document to call an external API via the callAPI function. You must classify the document and extract all the information necessary to call the function. `,
-        },
-        {
-          role: "user",
-          content: `Here is a plain-text representation of an invoice, receipt or other bill document. Use this to call the callAPI function.
-    Document:
-    ${text}
-        `,
-        },
-      ],
-      [
-        {
-          name: "callAPI",
-          description: "Call external api with data extract from document",
-          parameters: {
-            type: "object",
-            // Convert shape to parameter format
-            properties: shape,
-          },
-        },
-      ],
-      "gpt-4", // Use gpt-4
-      2 // Allow 2 attempts
-    );
-  } catch (e) {
-    console.log("Error calling API", e);
-    return { error: "Error calling API", rawResponse: "" };
+// Takes a subset of the pages from a PDF and returns a new PDF
+// End page is inclusive
+const splitPdf = async (pdfBuffer, startPage, endPage) => {
+  const pdfDoc = await PDFDocument.load(pdfBuffer);
+  const pageCount = pdfDoc.getPageCount();
+
+  if (startPage < 0 || endPage >= pageCount || startPage > endPage) {
+    throw new Error("Invalid page range provided.");
   }
 
-  const args = res.choices?.[0]?.message?.["function_call"]?.arguments;
+  const newPdfDoc = await PDFDocument.create();
 
-  if (!args) {
-    console.log("No arguments found");
-    return { error: "No arguments found", rawResponse: "" };
+  for (let i = startPage; i <= endPage; i++) {
+    const [copiedPage] = await newPdfDoc.copyPages(pdfDoc, [i]);
+    newPdfDoc.addPage(copiedPage);
   }
 
-  try {
-    const rawJSON = JSON.parse(args);
-    return formatJSON(rawJSON, shape, null);
-  } catch (e) {
-    return { error: "Error parsing argument JSON", rawResponse: args };
-  }
+  return await newPdfDoc.save();
 };
 
-const getClassificationForJob = async (fileId, textLayout, shape) => {
-  if (!textLayout || !!textLayout.error) {
-    return { [fileId]: { error: "No text layout for file" } };
+/**
+ * Takes in a text layout.
+ * Determines how many invoices are in the layout and their page ranges
+ * Splits the file into multiple files
+ * Splits layout into multiple layouts
+ *
+ * Returns an object:
+ * {
+ *      [serverId]: {
+ *          textLayout
+ *      },
+ *     ...
+ * }
+ */
+const splitDocumentsIntoInvoices = async (file, textPages) => {
+  const fileId = file.serverId;
+
+  // If it's not a PDF, it's not clear how we would split it
+  if (!fileId.toLowerCase().includes("pdf")) {
+    return { [fileId]: { ...file, textLayout: joinPages(textPages) } };
   }
 
-  try {
-    const args = await classifyInvoiceDocuments(textLayout, shape);
-    return { [fileId]: args };
-  } catch (e) {
-    console.log("error", e);
-    return { [fileId]: { error: e.message } };
+  // If theres only one page we will assume there is only one invoice
+  if (textPages.length < 2) {
+    return { [fileId]: { ...file, textLayout: joinPages(textPages) } };
   }
+
+  const splitResult = await getQueryResponses(
+    joinPages(textPages),
+    multiInvoicesPerDocumentShape
+  );
+
+  // If there was some error, return the original text layout
+  if (!splitResult) {
+    return { [fileId]: { ...file, textLayout: joinPages(textPages) } };
+  }
+
+  // If there's only one invoice, return the original text layout
+  if (
+    !splitResult.hasMultipleInvoices ||
+    splitResult.invoiceDetails.length < 2
+  ) {
+    return { [fileId]: { ...file, textLayout: joinPages(textPages) } };
+  }
+
+  // Download the original document
+  const originalDocumentRes = await axios.get(
+    `${fileDownloadUrlPrefix}${fileId}`,
+    {
+      responseType: "arraybuffer",
+    }
+  );
+  const originalDocument = new Uint8Array(originalDocumentRes.data);
+
+  const splitFiles = await Promise.all(
+    splitResult.invoiceDetails.map(async (invoice, idx) => {
+      if (
+        !Number.isInteger(invoice.invoiceStartPage) ||
+        !Number.isInteger(invoice.invoiceEndPage)
+      ) {
+        throw new Error("Invalid page range provided.");
+      }
+
+      const startPage = invoice.invoiceStartPage - 1;
+      const endPage = invoice.invoiceEndPage - 1;
+
+      const invoiceLayout = joinPages(textPages.slice(startPage, endPage + 1));
+      const invoicePdf = await splitPdf(originalDocument, startPage, endPage);
+
+      const formData = new FormData();
+      formData.append(
+        `documents`,
+        new Blob([invoicePdf], { type: "application/pdf" }),
+        `${v4()}.pdf`
+      );
+
+      const response = await axios.post(fileUploadUrl, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      const { uploadedKeys } = response.data;
+
+      return {
+        [uploadedKeys[0]]: {
+          serverId: uploadedKeys[0],
+          fileType: "application/pdf",
+          filename: `part_${idx}_of_${splitResult.invoiceDetails.length}_${file.filename}`,
+          textLayout: invoiceLayout,
+        },
+      };
+    })
+  );
+
+  return splitFiles.reduce((cum, file) => {
+    return {
+      ...cum,
+      ...file,
+    };
+  }, {});
 };
 
 export const preprocessJob = async (jobId) => {
@@ -155,90 +223,33 @@ export const preprocessJob = async (jobId) => {
     const postOCRJob = postOCRRes.data[0];
 
     /**
-     * Classify each raw file and extract some characteristics
-     *
-     * What type of document is it? Receipt, single PO invoice, multi PO invoice, etc.
-     * Is there one of this item in the document or more than one
-     * Page ranges:
-     *
-     * Please choose the classification that best describes the document.
-     * Is there one of these or several in the document
-     * What are the page ranges of each of these
-     *
+     * BEGIN SPLIT DOCUMENTS INTO INVOICES
      */
 
-    /**
-     *
-     * Here's the decision tree
-     *
-     * Is it a bill or an invoice?
-     * If it's an invoice, is there one invoice or more than one?
-     * For each invoice, is there one PO or more than one?
-     *
-     */
-
-    // Get documents that still need OCR
-    const fileIdsForClassification = postOCRJob.state.rawFiles
-      .map((rf) => rf.serverId)
-      .filter((sid) => !postOCRJob.state.rawTextClassifications[sid]);
-
-    const chunkedFileIdsForClassification = chunkArray(
-      fileIdsForClassification,
-      10
+    // Get documents that successfully returned OCR
+    const filesToSplit = postOCRJob.state.rawFiles.filter(
+      (f) => postOCRJob.state.rawTextLayouts[f.serverId].length > 0
     );
 
-    for (const classifyChunk of chunkedFileIdsForClassification) {
+    const chunkedFilesToSplit = chunkArray(filesToSplit, 10);
+
+    for (const splitChunk of chunkedFilesToSplit) {
       // Wait for all docs in this chunk to return
-      const classificationResults = await Promise.all(
-        classifyChunk.map((fileId) =>
-          getClassificationForJob(
-            fileId,
-            postOCRJob.state.rawTextLayouts[fileId],
-            firstPassClassificationShape
+      const splitFiles = await Promise.all(
+        splitChunk.map((file) =>
+          splitDocumentsIntoInvoices(
+            file,
+            postOCRJob.state.rawTextLayouts[file.serverId]
           )
         )
       );
 
-      // For results that are invoices, check if there's more than one PO
-      const poInvoiceResults = classificationResults.filter((res) => {
-        const val = Object.values(res)[0];
-        return !val.error && val.documentType === "invoice";
-      });
-
-      const poInvoiceClassificationResult = await Promise.all(
-        poInvoiceResults.map((res) => {
-          const fileId = Object.keys(res)[0];
-          return getClassificationForJob(
-            fileId,
-            postOCRJob.state.rawTextLayouts[fileId],
-            singelOrMultiPOInvoiceShape
-          );
-        })
-      );
-
-      const classificationResultObject = classificationResults.reduce(
-        (cum, res) => {
-          return { ...cum, ...res };
-        },
-        {}
-      );
-
-      const poInvoiceClassificationResultObject =
-        poInvoiceClassificationResult.reduce((cum, res) => {
-          return { ...cum, ...res };
-        }, {});
-
-      // Merge the two objects
-      const combinedClassificationResults = Object.keys(
-        classificationResultObject
-      ).map((key) => {
+      const processedFiles = splitFiles.reduce((cum, file) => {
         return {
-          [key]: {
-            ...classificationResultObject[key],
-            ...(poInvoiceClassificationResultObject[key] || {}),
-          },
+          ...cum,
+          ...file,
         };
-      });
+      }, {});
 
       // Get current job state
       const currentJobRes = await supabase
@@ -246,22 +257,16 @@ export const preprocessJob = async (jobId) => {
         .select()
         .eq("id", jobId);
       const currentJobState = currentJobRes.data[0].state;
-      const currentClassificationResults =
-        currentJobState.rawTextClassifications;
+      const currentProcessedFiles = currentJobState.processedFiles;
 
       // Compute new state by merging all OCR results with old state
-      const newClassificationResults = combinedClassificationResults.reduce(
-        (cum, res) => {
-          return {
-            ...cum,
-            ...res,
-          };
-        },
-        currentClassificationResults
-      );
+      const newProcessedFiles = {
+        ...currentProcessedFiles,
+        ...processedFiles,
+      };
 
       const newJobState = currentJobState;
-      newJobState.rawTextClassifications = newClassificationResults;
+      newJobState.processedFiles = newProcessedFiles;
 
       // Update state
       await supabase
@@ -270,14 +275,13 @@ export const preprocessJob = async (jobId) => {
         .eq("id", jobId);
     }
 
-    // Set status to processing
-    // await supabase
-    //   .from("jobs")
-    //   .update({
-    //     status: "EDITING",
-    //     state: { ...postOCRJob.state, editingFiles: postOCRJob.state.rawFiles },
-    //   })
-    //   .eq("id", jobId);
+    // Set status to EDITING
+    await supabase
+      .from("jobs")
+      .update({
+        status: "EDITING",
+      })
+      .eq("id", jobId);
   } catch (e) {
     console.log("error", e);
   }

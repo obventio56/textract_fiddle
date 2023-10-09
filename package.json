@@ -10,7 +10,7 @@
     "@supabase/supabase-js": "^2.36.0",
     "@types/mathjs": "^9.4.2",
     "async": "^3.2.4",
-    "axios": "^1.5.0",
+    "axios": "^1.5.1",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -21,6 +21,7 @@
     "mime-types": "^2.1.35",
     "ms-rest-azure": "^3.0.2",
     "multer": "^1.4.5-lts.1",
+    "pdf-lib": "^1.17.1",
     "simple-statistics": "^7.8.3",
     "svd-js": "^1.1.1",
     "uuid": "^9.0.1"

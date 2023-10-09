@@ -1,11 +1,7 @@
 import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
-import {
-  getFilteredShape,
-  getOCRDocument,
-  getQueryResponses,
-} from "./index.js";
+import { getExtraction, getOCRDocument } from "./index.js";
 import {
   S3Client,
   CreateMultipartUploadCommand,
@@ -163,18 +159,7 @@ app.post("/getLayout", async (req, res) => {
 app.post("/extract", async (req, res) => {
   try {
     const { shape, textLayout } = req.body;
-
-    // Get whether each property is present or not
-    console.log(shape);
-
-    // Returns shape with an extra property on each argument indicating whether or not it is present
-    const filteredShape = await getFilteredShape(textLayout, shape);
-
-    console.log(shape, filteredShape);
-
-    const args = await getQueryResponses(textLayout, filteredShape);
-
-    console.log("args", args);
+    const args = await getExtraction(textLayout, shape);
 
     // Your logic for extract
     res.json({ results: args });
@@ -229,7 +214,6 @@ app.post("/preprocessJob", async (req, res) => {
         state: {
           rawFiles: files,
           rawTextLayouts: {},
-          rawTextClassifications: {},
         },
       })
       .select();
