@@ -2,7 +2,7 @@ import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { getOCRDocument, getQueryResponses } from "./index.js";
 
-function chunkArray(array, chunkSize) {
+export function chunkArray(array, chunkSize) {
   // Initialize an empty array to hold the chunks
   let chunks = [];
 
@@ -27,9 +27,9 @@ function chunkArray(array, chunkSize) {
  *
  */
 
-const getOCRForJob = async (fileId) => {
+export const getOCRForJob = async (fileId, returnPages = false) => {
   try {
-    const textLayout = await getOCRDocument(fileId);
+    const textLayout = await getOCRDocument(fileId, returnPages);
     return { [fileId]: textLayout };
   } catch (e) {
     console.log("error", e);

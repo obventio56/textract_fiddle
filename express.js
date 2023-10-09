@@ -20,6 +20,7 @@ import mime from "mime-types";
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { processJob } from "./processJob.js";
+import { preprocessJob } from "./preprocessJob.js";
 
 const app = express();
 
@@ -183,7 +184,7 @@ app.post("/extract", async (req, res) => {
   }
 });
 
-app.post("/job", async (req, res) => {
+app.post("/processJob", async (req, res) => {
   try {
     const { shape, fileIds } = req.body;
 
@@ -206,6 +207,36 @@ app.post("/job", async (req, res) => {
     res.json({ jobId: record.data[0].id });
 
     await processJob(record.data[0].id);
+  } catch (e) {
+    console.error(e);
+    res.status(500).send({ error: "Failed to create job." });
+  }
+});
+
+app.post("/preprocessJob", async (req, res) => {
+  try {
+    const { files } = req.body;
+
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_PUBLIC_ANON_KEY
+    );
+
+    const record = await supabase
+      .from("jobs")
+      .insert({
+        status: "PREPROCESSING",
+        state: {
+          rawFiles: files,
+          rawTextLayouts: {},
+          rawTextClassifications: {},
+        },
+      })
+      .select();
+
+    res.json({ jobId: record.data[0].id });
+
+    await preprocessJob(record.data[0].id);
   } catch (e) {
     console.error(e);
     res.status(500).send({ error: "Failed to create job." });

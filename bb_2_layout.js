@@ -9,7 +9,6 @@
 
 import optimalKMeansCluster from "./kmeans.js";
 import axios from "axios";
-import { writeFileSync } from "fs";
 import * as math from "mathjs";
 
 // It is stupid-difficult to do homography in JS so I put a server around python lol
@@ -31,7 +30,7 @@ function transformPoint(point, H) {
   };
 }
 
-const bb2Layout = async (awsResponse, azureResponse) => {
+const bb2Layout = async (awsResponse, azureResponse, returnPages = false) => {
   const pages = awsResponse
     .filter((block) => block.BlockType === "PAGE")
     .reduce((cum, page) => {
@@ -46,6 +45,12 @@ const bb2Layout = async (awsResponse, azureResponse) => {
   pages.sort((a, b) => a.Page - b.Page);
 
   const pageTexts = await Promise.all(pages.map(processPage));
+
+  // Return pages separately
+  if (returnPages) {
+    return pageTexts;
+  }
+
   const text = pageTexts.reduce((cum, pageText, idx) => {
     return cum + `\n ------ BEGIN PAGE ${idx + 1} ------ \n` + pageText;
   }, "");

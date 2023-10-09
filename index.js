@@ -64,12 +64,12 @@ const sleep = (ms) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
-const formatJSON = (json, shape, defaultValue = "NOT FOUND") => {
+export const formatJSON = (json, shape, defaultValue = "NOT FOUND") => {
   // This should ensure the order of the keys is the same as the shape
   return Object.entries(shape).reduce((acc, [key, value]) => {
     // If it's expected to be an array, we need to map over it
     // If there are no values, we need to return an empty array
-    if (value.type === "array") {
+    if (value.type === "array" && value.items.type === "object") {
       return {
         ...acc,
         [key]: (json[key] || []).map((item) =>
@@ -423,14 +423,18 @@ export const getAWSOCRResponse = async (fileKey) => {
 };
 
 // Get text in approximate plain text layout from document in S3
-export const getOCRDocument = async (fileKey) => {
+export const getOCRDocument = async (fileKey, returnPages = false) => {
   const [awsResponse, azureResponse] = await Promise.all([
     getAWSOCRResponse(fileKey),
     getAzureOCRResponse(fileDownloadUrlPrefix + fileKey),
   ]);
 
-  const text = await bb2Layout(awsResponse, azureResponse);
-  return text;
+  const layoutResponse = await bb2Layout(
+    awsResponse,
+    azureResponse,
+    returnPages
+  );
+  return layoutResponse;
 };
 
 export const handler = async (event) => {

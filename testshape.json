@@ -1,37 +1,169 @@
 {
-    "line_items": {
-        "type": "array",
-        "description": "Details about line items in the invoice",
-        "items": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string",
-                    "description": "A description of the goods associated with this line item",
-                    "presence": true
-                },
-                "po_number": {
-                    "type": "string",
-                    "description": "The PO number associated with this line item",
-                    "presence": true
-                },
-                "quantity": {
-                    "type": "number",
-                    "description": "The quantity of this line item",
-                    "presence": true
-                },
-                "unit": {
-                    "type": "string",
-                    "description": "The unit associated with the price of this item. For example per gallon, per oz etc",
-                    "presence": true
-                },
-                "price_per_unit": {
-                    "type": "number",
-                    "description": "The cost of this item per unit of sale",
-                    "presence": true
+    "shape": {
+        "invoice_items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "item_name": {
+                        "type": "string",
+                        "description": "The name of this item. Please take the name in the original language and translate it into English if it is not already in English"
+                    },
+                    "quanitity": {
+                        "type": "number",
+                        "description": "The amount of this item listed in the invoice"
+                    },
+                    "total_cost": {
+                        "type": "number",
+                        "description": "The total amount spent on this item in the invoice"
+                    },
+                    "cost_per_count": {
+                        "type": "number",
+                        "description": "The cost of this item per quantity"
+                    }
                 }
-            }
+            },
+            "description": "Details about items listed in this invoice. All results should be translated into English."
+        }
+    },
+    "fileIds": [
+        "99fdf704-cbc7-47ae-8e55-73cb4e324710.pdf",
+        "756b49b1-6d79-4b53-9c53-d15e4f6f8b8d.pdf",
+        "ce6f65c2-2f48-4406-b668-24e4dc9f469c.pdf"
+    ],
+    "results": {
+        "textLayouts": {
+            "756b49b1-6d79-4b53-9c53-d15e4f6f8b8d.pdf": "\n ------ BEGIN PAGE 1 ------ \n电子发票（普通发票） \n全国统一发票监制章\t发票号码： 23312000000074147141 \n开票日期： 2023年09月08日 \n上海市税务局 \n购 名称： 上海美德电子有限公司\t销 名称： 村田电子贸易（上海）有限公司 \n方 买\t售 方\t下载次数:1 \n信 统一社会信用代码/纳税人识别号： 91310115748062682F\t信 统一社会信用代码/纳税人识别号： 91310000607306882A \n息\t息 \n项目名称\t规格型号\t单位\t数 量\t单价\t金 额 税率/征收率\t税 额 \n*电子元件*电子配件\t个\t20000\t0.368594\t7371.88\t0%\t0.00 \n合\t计\t¥7371.88\t¥0.00 \n价税合计（大写）\t柒仟叁佰柒拾壹圆捌角捌分\t（小写） ¥7371.88 \n村田发票号：585733外币金额：JPY147108 \n备 MURATA ELECTRONICS TRADING (SHANGHAI) CO.,LTD. 汇率：0.050112客户：R2152 V MAX CHEN \n注 区内贸易 \n开票人： 宋佳凤 ",
+            "99fdf704-cbc7-47ae-8e55-73cb4e324710.pdf": "\n ------ BEGIN PAGE 1 ------ \n电子发票（增值税专用发票） \n全国统一发票监制章\t发票号码： 23312000000082494280 \n开票日期： 2023年09月20日 \n上海市税务局 \n购 名称： 上海美德电子有限公司\t销 名称： 泰科电子（上海）有限公司 \n方 买\t售 方\t下载次数:1 \n信 统一社会信用代码/纳税人识别号： 91310115748062682F\t信 统一社会信用代码/纳税人识别号： 91310000607395993J \n息\t息 \n项目名称\t规格型号\t单位\t数 量\t单价\t金 额 税率/征收率\t税 额 \n*电力电子元器件*塑壳\t770021-1\tPC\t750\t2.44924\t1836.93\t13%\t238.80 \n(电路接插件零件)770021 \n-1 \n合\t计\t¥1836.93\t¥238.80 \n价税合计（大写）\t贰仟零柒拾伍圆柒角叁分\t（小写） ¥2075.73 \n客户:1405773订单:3081671649合同:3557820发货项:36582662发票:2641648168 \n备 \n注 \n开票人： 陈燕 ",
+            "ce6f65c2-2f48-4406-b668-24e4dc9f469c.pdf": "\n ------ BEGIN PAGE 1 ------ \n电子发票（增值税专用发票） \n全国统一发票监制章 \n发票号码： 23442000000199916177 \n开票日期： 2023年09月14日 \n广东省税务局 \n购 名称： 上海美德电子有限公司\t销 名称： 安费诺科技（珠海）有限公司 \n买\t售 \n下载次数:5 \n方\t方 \n信 统一社会信用代码/纳税人识别号： 91310115748062682F\t信 统一社会信用代码/纳税人识别号： 9144040066650482XC \n息\t息 \n项目名称\t规格型号\t单位\t数 量\t单价\t金 额 税率/征收率\t税 额 \n*配电控制设备*电子连接 71-148518-11S\t个\t115\t70\t8050.00\t13%\t1046.50 \n器Amphenol \n*配电控制设备*电子连接 91-148218-11P\t个\t1\t45\t45.00\t13%\t5.85 \n器Amphenol® \n*配电控制设备*电子连接 10-597109-17D\t个\t1058\t6.03\t6379.74\t13%\t829.37 \n器Amphenol \n*配电控制设备*电子连接 CFL-747199-08P\t个\t140\t13.36\t1870.40\t13%\t243.15 \n器Amphenol \n*配电控制设备*电子连接 C10-738774-203\t个\t3000\t0.82\t2460.00\t13%\t319.80 \n器Amphenol \n*配电控制设备*电子连接 C10-754727-110\t个\t170\t19\t3230.00\t13%\t419.90 \n器Surlok Plus®\t2 \n*配电控制设备*电子连接 C10-754727-010\t个\t150\t19\t2850.00\t13%\t370.50 \n器Surlok Plus®\t1 \n*配电控制设备*电子连接 CFL-747199-08P\t个\t146\t13.36\t1950.56\t13%\t253.57 \n器Amphenol \n*配电控制设备*电子连接 MS3108A-20-15S\t个\t16\t107.41\t1718.56\t13%\t223.41 \n器Amphenol \n*配电控制设备*电子连接 FX3-0121-001.\t个\t2\t220\t440.00\t13%\t57.20 \n器 \n*配电控制设备*电子连接 FX3-0121-000.\t个\t2\t220\t440.00\t13%\t57.20 \n器 \n*配电控制设备*电子连接 C10-792553-350\t个\t100\t96\t9600.00\t13%\t1248.00 \n器RADSOK®\t0 \n*配电控制设备*电子连接 C10-792553-250\t个\t100\t96\t9600.00\t13%\t1248.00 \n器RADSOK®\t0 \n*配电控制设备*电子连接 71-146110-06P\t个\t10\t59.09\t590.90\t13%\t76.82 \n器Amphenol \n*配电控制设备*电子连接 C10-738774-203\t个\t36000\t0.82\t29520.00\t13%\t3837.60 \n器Amphenol \n*配电控制设备*电子连接\t-2323.00\t13%\t-301.99 \n器Amphenol \n*配电控制设备*电子连接 93-581490-27S\t个\t100\t132.3\t13230.00\t13%\t1719.90 \n器Amphenol \n合\t计\t¥89652.16\t¥11654.78 \n价税合计（大写）\t壹拾万零壹仟叁佰零陆圆玖角肆分\t（小写） ¥101306.94 \n3531026 \n3537944 \n备 \n3543365 \n3551179 \n注 \n3554115 \n3556906 \n开票人： 曾凡荣 "
         },
-        "presence": true
+        "extractionResults": {
+            "756b49b1-6d79-4b53-9c53-d15e4f6f8b8d.pdf": {
+                "invoice_items": [
+                    {
+                        "item_name": "电子元件*电子配件",
+                        "quanitity": 20000,
+                        "total_cost": 7371.88,
+                        "cost_per_count": 0.368594
+                    }
+                ]
+            },
+            "99fdf704-cbc7-47ae-8e55-73cb4e324710.pdf": {
+                "invoice_items": [
+                    {
+                        "item_name": "电力电子元器件*塑壳 (电路接插件零件)770021-1",
+                        "quanitity": 750,
+                        "total_cost": 1836.93,
+                        "cost_per_count": 2.44924
+                    }
+                ]
+            },
+            "ce6f65c2-2f48-4406-b668-24e4dc9f469c.pdf": {
+                "invoice_items": [
+                    {
+                        "item_name": "*配电控制设备*电子连接 71-148518-11S",
+                        "quanitity": 115,
+                        "total_cost": 8050,
+                        "cost_per_count": 70
+                    },
+                    {
+                        "item_name": "*配电控制设备*电子连接 91-148218-11P",
+                        "quanitity": 1,
+                        "total_cost": 45,
+                        "cost_per_count": 45
+                    },
+                    {
+                        "item_name": "*配电控制设备*电子连接 10-597109-17D",
+                        "quanitity": 1058,
+                        "total_cost": 6379.74,
+                        "cost_per_count": 6.03
+                    },
+                    {
+                        "item_name": "*配电控制设备*电子连接 CFL-747199-08P",
+                        "quanitity": 140,
+                        "total_cost": 1870.4,
+                        "cost_per_count": 13.36
+                    },
+                    {
+                        "item_name": "*配电控制设备*电子连接 C10-738774-203",
+                        "quanitity": 3000,
+                        "total_cost": 2460,
+                        "cost_per_count": 0.82
+                    },
+                    {
+                        "item_name": "*配电控制设备*电子连接 C10-754727-110",
+                        "quanitity": 170,
+                        "total_cost": 3230,
+                        "cost_per_count": 19
+                    },
+                    {
+                        "item_name": "*配电控制设备*电子连接 C10-754727-010",
+                        "quanitity": 150,
+                        "total_cost": 2850,
+                        "cost_per_count": 19
+                    },
+                    {
+                        "item_name": "*配电控制设备*电子连接 CFL-747199-08P",
+                        "quanitity": 146,
+                        "total_cost": 1950.56,
+                        "cost_per_count": 13.36
+                    },
+                    {
+                        "item_name": "*配电控制设备*电子连接 MS3108A-20-15S",
+                        "quanitity": 16,
+                        "total_cost": 1718.56,
+                        "cost_per_count": 107.41
+                    },
+                    {
+                        "item_name": "*配电控制设备*电子连接 FX3-0121-001.",
+                        "quanitity": 2,
+                        "total_cost": 440,
+                        "cost_per_count": 220
+                    },
+                    {
+                        "item_name": "*配电控制设备*电子连接 FX3-0121-000.",
+                        "quanitity": 2,
+                        "total_cost": 440,
+                        "cost_per_count": 220
+                    },
+                    {
+                        "item_name": "*配电控制设备*电子连接 C10-792553-350",
+                        "quanitity": 100,
+                        "total_cost": 9600,
+                        "cost_per_count": 96
+                    },
+                    {
+                        "item_name": "*配电控制设备*电子连接 C10-792553-250",
+                        "quanitity": 100,
+                        "total_cost": 9600,
+                        "cost_per_count": 96
+                    },
+                    {
+                        "item_name": "*配电控制设备*电子连接 71-146110-06P",
+                        "quanitity": 10,
+                        "total_cost": 590.9,
+                        "cost_per_count": 59.09
+                    },
+                    {
+                        "item_name": "*配电控制设备*电子连接 C10-738774-203",
+                        "quanitity": 36000,
+                        "total_cost": 29520,
+                        "cost_per_count": 0.82
+                    },
+                    {
+                        "item_name": "*配电控制设备*电子连接",
+                        "quanitity": null,
+                        "total_cost": -2323,
+                        "cost_per_count": null
+                    },
+                    {
+                        "item_name": "*配电控制设备*电子连接 93-581490-27S",
+                        "quanitity": 100,
+                        "total_cost": 13230,
+                        "cost_per_count": 132.3
+                    }
+                ]
+            }
+        }
     }
 }
