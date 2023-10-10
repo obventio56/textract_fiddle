@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { getExtraction, getOCRDocument } from "./index.js";
+import { getExtraction, getOCRDocument, sleep } from "./index.js";
 
 export function chunkArray(array, chunkSize) {
   // Initialize an empty array to hold the chunks
@@ -37,13 +37,89 @@ export const getOCRForJob = async (fileId, returnPages = false) => {
   }
 };
 
+/**
+ * Intelligently coalesce extracted values
+ */
+export const coalesceExtractedValues = (shapeProperty, extractionResults) => {
+  const allSame = extractionResults.every(
+    (value) => value === extractionResults[0]
+  );
+
+  if (!allSame) {
+    console.log(shapeProperty, "not all same", extractionResults);
+  }
+
+  // Return the first non-falsy value or return the first value if all are falsy
+  for (const extractionResult of extractionResults) {
+    const isFalsy = extractionResult === "null" || !extractionResult;
+    if (!isFalsy) {
+      return extractionResult;
+    }
+  }
+
+  return extractionResults[0];
+};
+
+const attempts = 1;
+const multiExtractEntry = async (shapeProperty, shapeValue, textLayout) => {
+  const trialResults = [];
+  const singlePropertyShape = { [shapeProperty]: shapeValue };
+
+  for (let i = 0; i < attempts; i++) {
+    const trialResult = await getExtraction(textLayout, singlePropertyShape);
+    trialResults.push(trialResult[shapeProperty]);
+  }
+
+  const coalescedValue = coalesceExtractedValues(shapeValue, trialResults);
+
+  return {
+    [shapeProperty]: coalescedValue,
+  };
+};
+
 const getExtractionForJob = async (fileId, shape, textLayout) => {
   if (!textLayout || !!textLayout.error) {
     return { [fileId]: { error: "No text layout for file" } };
   }
 
   try {
-    const args = await getExtraction(textLayout, shape);
+    const shapeEntries = Object.entries(shape);
+
+    // Every property that is an array of objects should be its own chunk
+    const listShapeChunks = shapeEntries
+      .filter(
+        ([_, value]) => value.type === "array" && value.items.type === "object"
+      )
+      .map((entry) => [entry]);
+
+    const nonListShapeEntries = shapeEntries.filter(
+      ([_, value]) => !(value.type === "array" && value.items.type === "object")
+    );
+
+    const nonListShapeEntryChunks = chunkArray(nonListShapeEntries, 10);
+    const shapeEntryChunks = [...listShapeChunks, ...nonListShapeEntryChunks];
+
+    let propertyObjects = [];
+    for (const shapeEntryChunk of shapeEntryChunks) {
+      const propertyObjectChunk = await Promise.all(
+        shapeEntryChunk.map(([shapeProperty, shapeValue]) =>
+          multiExtractEntry(shapeProperty, shapeValue, textLayout)
+        )
+      );
+
+      propertyObjects = [...propertyObjects, ...propertyObjectChunk];
+    }
+
+    // Get extraction for each property, several times separately
+    const args = propertyObjects.reduce((cum, pv) => {
+      return {
+        ...cum,
+        ...pv,
+      };
+    }, {});
+
+    sleep(5000);
+
     return { [fileId]: args };
   } catch (e) {
     console.log("error", e);
@@ -71,52 +147,8 @@ export const processJob = async (jobId) => {
       .update({ status: "PROCESSING" })
       .eq("id", jobId);
 
-    // Get documents that still need OCR
-    const fileIdsForOCR = initialJob.state.fileIds.filter(
-      (fid) => !initialJob.state.results.textLayouts[fid]
-    );
-    const chunkedFileIdsForOCR = chunkArray(fileIdsForOCR, 15);
-
-    for (const ocrChunk of chunkedFileIdsForOCR) {
-      // Wait for all docs in this chunk to return
-      const ocrResults = await Promise.all(
-        ocrChunk.map((fileId) => getOCRForJob(fileId))
-      );
-
-      // Get current job state
-      const currentJobRes = await supabase
-        .from("jobs")
-        .select()
-        .eq("id", jobId);
-      const currentJobState = currentJobRes.data[0].state;
-      const currentTextLayouts = currentJobState.results.textLayouts;
-
-      // Compute new state by merging all OCR results with old state
-      const newTextLayouts = ocrResults.reduce((cum, res) => {
-        return {
-          ...cum,
-          ...res,
-        };
-      }, currentTextLayouts);
-
-      const newJobState = currentJobState;
-      newJobState.results.textLayouts = newTextLayouts;
-
-      // Update state
-      await supabase
-        .from("jobs")
-        .update({ state: newJobState })
-        .eq("id", jobId);
-    }
-
-    // Get state after all OCR
-    const postOCRRes = await supabase.from("jobs").select().eq("id", jobId);
-    const postOCRJob = postOCRRes.data[0];
-
-    const fileIdsForExtraction = postOCRJob.state.fileIds.filter(
-      (fid) => !postOCRJob.state.results.extractionResults[fid]
-    );
-    const chunkedFileIdsForExtraction = chunkArray(fileIdsForExtraction, 10);
+    const fileIdsForExtraction = Object.keys(initialJob.state.processedFiles);
+    const chunkedFileIdsForExtraction = chunkArray(fileIdsForExtraction, 3);
 
     for (const extractChunk of chunkedFileIdsForExtraction) {
       // Wait for all docs in this chunk to return
@@ -124,8 +156,8 @@ export const processJob = async (jobId) => {
         extractChunk.map((fileId) =>
           getExtractionForJob(
             fileId,
-            postOCRJob.state.shape,
-            postOCRJob.state.results.textLayouts[fileId]
+            initialJob.state.shape,
+            initialJob.state.processedFiles[fileId].textLayout
           )
         )
       );

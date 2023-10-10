@@ -5,12 +5,13 @@ import {
 } from "@aws-sdk/client-textract"; // ES Modules import
 // import { readFileSync, writeFileSync } from "fs";
 import { bb2Layout } from "./bb_2_layout.js";
-import { chatAPI } from "./openAI.js";
 import { uploadFileFromByteString, uploadFileFromUrl } from "./s3.js";
 import { createClient } from "@supabase/supabase-js";
 import axios from "axios";
 import { ComputerVisionClient } from "@azure/cognitiveservices-computervision";
 import { ApiKeyCredentials } from "@azure/ms-rest-js";
+import { openAIApi } from "./express.js";
+import "dotenv/config";
 
 // A public URL for downloading files by S3 key
 export const fileDownloadUrlPrefix = `${process.env.PROD_URL}/downloadDocument?key=`;
@@ -57,7 +58,7 @@ const exampleShape = {
   },
 };
 
-const sleep = (ms) => {
+export const sleep = (ms) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
@@ -75,10 +76,21 @@ export const formatJSON = (json, shape, defaultValue = "NOT FOUND") => {
       };
     }
 
+    let defaultValue;
+    if (value.type === "number") {
+      defaultValue = 0;
+    } else if (value.type === "string") {
+      defaultValue = "null";
+    } else if (value.type === "boolean") {
+      defaultValue = false;
+    } else if (value.type === "array") {
+      defaultValue = [];
+    }
+
     // Otherwise just return the value
     return {
       ...acc,
-      [key]: json[key] || (json[key] === false ? false : defaultValue),
+      [key]: json[key] || defaultValue,
     };
   }, {});
 };
@@ -126,11 +138,11 @@ const getShapeWithPresence = async (text, shape) => {
 
   let res;
   try {
-    res = await chatAPI(
+    res = await openAIApi.chatAPI(
       [
         {
           role: "system",
-          content: `You are an expert accountant specializing in accounts payable. You are going to help me correctly determine what information is present in a provided invoice so that I can call an API in our ERP system.
+          content: `You are an expert translator and international accountant specializing in accounts payable. You are going to help me correctly determine what information is present in a provided invoice so that I can call an API in our ERP system.
           You will be given a plain-text representation of an invoice, receipt, or other bill document that was created using OCR. We have done our best to maintain layout and formatting in the plain-text representation, but it may not be perfect.
           Your job is to use the provided document to determine what information is present in order to call an external API via the callAPI function. You must determine the presence or absence of each piece of information in order to call the API. 
           For each piece of information you will respond with a boolean.`,
@@ -159,14 +171,14 @@ const getShapeWithPresence = async (text, shape) => {
     );
   } catch (e) {
     console.log("Error calling API", e);
-    return { error: "Error calling API", rawResponse: "" };
+    return formatJSON({}, translatedShape, null);
   }
 
   const args = res.choices?.[0]?.message?.["function_call"]?.arguments;
 
   if (!args) {
     console.log("No arguments found");
-    return { error: "No arguments found", rawResponse: "" };
+    return formatJSON({}, translatedShape, null);
   }
 
   let formattedResults;
@@ -175,7 +187,8 @@ const getShapeWithPresence = async (text, shape) => {
     const rawJSON = JSON.parse(args);
     formattedResults = formatJSON(rawJSON, translatedShape, null);
   } catch (e) {
-    return { error: "Error parsing argument JSON", rawResponse: args };
+    console.log("No arguments found", e);
+    return formatJSON({}, translatedShape, null);
   }
 
   // Reduce original shape to add back in whether or not each property is present.
@@ -233,12 +246,12 @@ export const getQueryResponses = async (text, shape) => {
 
   let res;
   try {
-    res = await chatAPI(
+    res = await openAIApi.chatAPI(
       [
         {
           role: "system",
-          content: `You are an expert accountant specializing in accounts payable. You are going to help me correctly extract, summarize, and translate information from receipts, invoices, and other bills necessary to call an API to enter these transactions into our ERP system.
-          You will be given a plain-text representation of an invoice, receipt, or other bill document that was created using OCR. We have done our best to maintain layout and formatting in the plain-text representation, but it may not be perfect.
+          content: `You are an expert translator and international accountant specializing in accounts payable. You are going to help me correctly extract, summarize, and translate information from receipts, invoices, and other bills necessary to call an API to enter these transactions into our ERP system.
+          You will be given a plain-text representation of an invoice or bill document that was created using OCR. We have done our best to maintain layout and formatting in the plain-text representation, but it may not be perfect.
           Your job is to use the provided document to call an external API via the callAPI function. You must extract all the information necessary to call the function. You may also be required to produce summaries and classifications in order to call the function.
           If you cannot find an answer or piece of information, it is ok to return null.`,
         },
@@ -265,21 +278,22 @@ export const getQueryResponses = async (text, shape) => {
     );
   } catch (e) {
     console.log("Error calling API", e);
-    return { error: "Error calling API", rawResponse: "" };
+    return formatJSON({}, shape);
   }
 
   const args = res.choices?.[0]?.message?.["function_call"]?.arguments;
 
   if (!args) {
     console.log("No arguments found");
-    return { error: "No arguments found", rawResponse: "" };
+    return formatJSON({}, shape);
   }
 
   try {
     const rawJSON = JSON.parse(args);
     return formatJSON(rawJSON, shape);
   } catch (e) {
-    return { error: "Error parsing argument JSON", rawResponse: args };
+    console.log("Error parsing argument JSON", e);
+    return formatJSON({}, shape);
   }
 };
 
@@ -289,35 +303,35 @@ export const getQueryResponses = async (text, shape) => {
  */
 export const getExtraction = async (text, shape) => {
   // Returns shape with an extra property on each argument indicating whether or not it is present
-  const shapeWithPresence = await getShapeWithPresence(text, shape);
+  const shapeWithPresence = shape; //await getShapeWithPresence(text, shape);
 
   const filteredShape = Object.entries(shapeWithPresence).reduce(
     (cum, [key, value]) => {
       // If it's an array of objects, we check that each property of the object is present
       if (value.type === "array" && value.items.type === "object") {
-        if (!value.presence) {
-          return cum;
-        }
+        // if (!value.presence) {
+        //   return cum;
+        // }
 
         // Check all properties in items
         const filteredProperties = Object.entries(
           value.items.properties
         ).reduce((subCum, [subKey, subValue]) => {
-          if (!subValue.presence) {
-            return subCum;
-          }
+          // if (!subValue.presence) {
+          //   return subCum;
+          // }
           return {
             ...subCum,
             [subKey]: subValue,
           };
-        });
+        }, {});
 
         return {
           ...cum,
           [key]: {
             ...value,
             items: {
-              ...value.items,
+              type: "object",
               properties: filteredProperties,
             },
           },
@@ -325,12 +339,12 @@ export const getExtraction = async (text, shape) => {
       }
 
       // Otherwise, just check that the parent property is present
-      if (value.presence) {
-        return {
-          ...cum,
-          [key]: value,
-        };
-      }
+      // if (value.presence) {
+      return {
+        ...cum,
+        [key]: value,
+      };
+      // }
 
       return cum;
     },

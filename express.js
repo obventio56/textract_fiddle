@@ -17,6 +17,7 @@ import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { processJob } from "./processJob.js";
 import { preprocessJob } from "./preprocessJob.js";
+import { OpenAIApi } from "./openAI.js";
 
 const app = express();
 
@@ -34,6 +35,7 @@ const fivemb = 5 * 1024 * 1024;
 
 const s3Client = new S3Client({});
 const bucketName = "unstructured-api-images"; // Replace with your bucket name
+export const openAIApi = new OpenAIApi();
 
 // Endpoints
 
@@ -171,27 +173,31 @@ app.post("/extract", async (req, res) => {
 
 app.post("/processJob", async (req, res) => {
   try {
-    const { shape, fileIds } = req.body;
+    const { shape, jobId } = req.body;
 
     const supabase = createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_PUBLIC_ANON_KEY
     );
 
-    const record = await supabase
+    const record = await supabase.from("jobs").select().eq("id", jobId);
+    const currentState = record.data[0].state;
+    const newState = {
+      ...currentState,
+      shape,
+      results: { extractionResults: {} },
+    };
+
+    const updatedRecord = await supabase
       .from("jobs")
       .insert({
-        state: {
-          shape,
-          fileIds,
-          results: { textLayouts: {}, extractionResults: {} },
-        },
+        state: newState,
       })
       .select();
 
-    res.json({ jobId: record.data[0].id });
+    res.json({ jobId: updatedRecord.data[0].id });
 
-    await processJob(record.data[0].id);
+    await processJob(updatedRecord.data[0].id);
   } catch (e) {
     console.error(e);
     res.status(500).send({ error: "Failed to create job." });
