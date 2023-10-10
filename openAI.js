@@ -29,7 +29,7 @@ const guardTokenLimit = (model, prompt) => {
 const chatAPI = async (
   messages,
   functions,
-  model = "gpt-4",
+  model = "gpt-3.5-turbo",
   allowedAttempts = 1
 ) => {
   // Ensure prompt length is within model limits
