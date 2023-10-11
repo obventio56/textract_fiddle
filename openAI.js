@@ -29,8 +29,8 @@ const guardTokenLimit = (model, prompt) => {
   return promptTokenLength;
 };
 
-const tokensPerMinute = 40000;
-const requestsPerMinute = 200;
+const tokensPerMinute = 300000;
+const requestsPerMinute = 1000;
 
 export class OpenAIApi {
   constructor() {
