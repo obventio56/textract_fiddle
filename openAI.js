@@ -8,7 +8,7 @@ const OPEN_AI_API_KEY = process.env.OPEN_AI_API_KEY;
 
 // Check renderer
 const modelTokenLimits = {
-  "gpt-3.5-turbo": 4096,
+  "gpt-4": 4096,
   "gpt-4": 8192,
   "text-embedding-ada-002": 8191,
 };
@@ -29,7 +29,7 @@ const guardTokenLimit = (model, prompt) => {
 const chatAPI = async (
   messages,
   functions,
-  model = "gpt-3.5-turbo",
+  model = "gpt-4",
   allowedAttempts = 1
 ) => {
   // Ensure prompt length is within model limits

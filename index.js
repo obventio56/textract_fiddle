@@ -119,7 +119,7 @@ export const getQueryResponses = async (text, shape) => {
           },
         },
       ],
-      "gpt-3.5-turbo", // Use gpt-3.5-turbo
+      "gpt-4", // Use gpt-4
       2 // Allow 2 attempts
     );
   } catch (e) {
