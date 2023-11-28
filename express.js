@@ -181,6 +181,54 @@ app.get("/jobStatus", async (req, res) => {
     return res.status(401).send({ error: "Unauthorized" });
   }
 
+  try {
+    const { jobId } = req.query;
+
+    const res = await supabase.from("jobs").select().eq("id", jobId);
+    const job = res.data[0];
+
+    if (!job) {
+      throw new Error("Job not found");
+    }
+
+    if (job.status === "READY") {
+      return res.json({
+        status: "READY",
+        results: job.state?.results?.extractionResults,
+      });
+    }
+
+    const fileIds = job.state?.fileIds || [];
+    const firstStageComplete = Object.keys(job.state.results.textLayouts);
+    const secondStageComplete = Object.keys(
+      job.state.results.extractionResults
+    );
+
+    if (
+      secondStageComplete.length > 0 ||
+      firstStageComplete.length === fileIds.length
+    ) {
+      return res.json({
+        status: "PROCESSING",
+        message: `Extracting data ${(
+          (secondStageComplete.length / fileIds.length) *
+          100
+        ).toFixed(2)}% complete`,
+      });
+    }
+
+    return res.json({
+      status: "PROCESSING",
+      message: `Preprocessing ${(
+        (firstStageComplete.length / fileIds.length) *
+        100
+      ).toFixed(2)}% complete`,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).send({ error: "Failed to get job status." });
+  }
+
   return res.json({ status: "ok" });
 });
 
