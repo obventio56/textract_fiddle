@@ -174,6 +174,7 @@ app.post("/extract", async (req, res) => {
 });
 
 app.get("/jobStatus", async (req, res) => {
+  const authorizationHeader = req.headers.authorization || "";
   if (allowedKeys.indexOf(authorizationHeader) === -1) {
     return res.status(401).send({ error: "Unauthorized" });
   }
