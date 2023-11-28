@@ -14,9 +14,12 @@ import * as math from "mathjs";
 
 // It is stupid-difficult to do homography in JS so I put a server around python lol
 const computeHomography = async (sourcePoints) => {
-  const res = await axios.post("https://0689-18-117-160-75.ngrok-free.app", {
-    points: sourcePoints.map((p) => [p.X, p.Y]),
-  });
+  const res = await axios.post(
+    "https://innocent-killdeer-centrally.ngrok-free.app",
+    {
+      points: sourcePoints.map((p) => [p.X, p.Y]),
+    }
+  );
 
   return res.data;
 };
