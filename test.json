@@ -1,0 +1,11 @@
+{
+    "shape": {
+        "name": {
+            "type": "string",
+            "description": "The name of the person this resume belongs to"
+        }
+    },
+    "fileIds": [
+        "9fc177b2-37e4-4011-8b1f-51a52ddecec2.pdf"
+    ]
+}

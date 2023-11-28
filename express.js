@@ -70,7 +70,6 @@ app.get("/downloadDocument", async (req, res) => {
 });
 
 app.post("/documents", upload.array("documents"), async (req, res) => {
-
   const authorizationHeader = req.headers.authorization || "";
   if (allowedKeys.indexOf(authorizationHeader) === -1) {
     return res.status(401).send({ error: "Unauthorized" });
@@ -78,12 +77,15 @@ app.post("/documents", upload.array("documents"), async (req, res) => {
 
   const files = req.files;
   const uploadedKeys = [];
+  const uploadedKeysMap = {};
 
   for (let file of files) {
     const fileExtension = file.originalname.split(".").pop();
     const key = `${v4()}.${fileExtension}`;
     const contentType =
       mime.lookup(fileExtension) || "application/octet-stream";
+
+    uploadedKeysMap[file.originalname] = key;
 
     try {
       const { UploadId } = await s3Client.send(
@@ -152,7 +154,7 @@ app.post("/documents", upload.array("documents"), async (req, res) => {
     }
   }
 
-  res.json({ uploadedKeys });
+  res.json({ uploadedKeys, uploadedKeysMap });
 });
 
 app.post("/getLayout", async (req, res) => {
