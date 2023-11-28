@@ -184,6 +184,11 @@ app.get("/jobStatus", async (req, res) => {
   try {
     const { jobId } = req.query;
 
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_PUBLIC_ANON_KEY
+    );
+
     const res = await supabase.from("jobs").select().eq("id", jobId);
     const job = res.data[0];
 
