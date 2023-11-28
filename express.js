@@ -189,8 +189,8 @@ app.get("/jobStatus", async (req, res) => {
       process.env.SUPABASE_PUBLIC_ANON_KEY
     );
 
-    const res = await supabase.from("jobs").select().eq("id", jobId);
-    const job = res.data[0];
+    const jobRes = await supabase.from("jobs").select().eq("id", jobId);
+    const job = jobRes.data[0];
 
     if (!job) {
       throw new Error("Job not found");
@@ -231,10 +231,8 @@ app.get("/jobStatus", async (req, res) => {
     });
   } catch (e) {
     console.error(e);
-    res.status(500).send({ error: "Failed to get job status." });
+    return res.status(500).send({ error: "Failed to get job status." });
   }
-
-  return res.json({ status: "ok" });
 });
 
 app.post("/job", async (req, res) => {
