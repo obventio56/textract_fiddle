@@ -16,6 +16,7 @@ import mime from "mime-types";
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { processJob } from "./processJob.js";
+import { OpenAIApi } from "./openAI.js";
 
 const allowedKeys = [
   "eg-42GCG7E9CKT7oUO9dqyBT3BlbkFJl9nAUvv2Zck0o9PFuknW", // demo
@@ -38,6 +39,7 @@ const fivemb = 5 * 1024 * 1024;
 
 const s3Client = new S3Client({});
 const bucketName = "unstructured-api-images"; // Replace with your bucket name
+export const openAIApi = new OpenAIApi();
 
 // Endpoints
 

@@ -7,7 +7,7 @@ import {
 import { re } from "mathjs";
 // import { readFileSync, writeFileSync } from "fs";
 import { bb2Layout } from "./bb_2_layout.js";
-import { chatAPI } from "./openAI.js";
+import { openAIApi } from "./express.js";
 import { uploadFileFromByteString, uploadFileFromUrl } from "./s3.js";
 import { createClient } from "@supabase/supabase-js";
 import axios from "axios";
@@ -91,7 +91,7 @@ const formatJSON = (json, shape) => {
 export const getQueryResponses = async (text, shape) => {
   let res;
   try {
-    res = await chatAPI(
+    res = await openAIApi.chatAPI(
       [
         {
           role: "system",
