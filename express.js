@@ -17,6 +17,11 @@ import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { processJob } from "./processJob.js";
 
+const allowedKeys = [
+  "eg-42GCG7E9CKT7oUO9dqyBT3BlbkFJl9nAUvv2Zck0o9PFuknW", // demo
+  "eg-F4VCnARzGkdP7l2KffwKT3BlbkFJUbqVOnqkb2N1N8EnjTyB", // sedna
+];
+
 const app = express();
 
 // Set up middleware
@@ -168,7 +173,20 @@ app.post("/extract", async (req, res) => {
   }
 });
 
+app.get("/jobStatus", async (req, res) => {
+  if (allowedKeys.indexOf(authorizationHeader) === -1) {
+    return res.status(401).send({ error: "Unauthorized" });
+  }
+
+  return res.json({ status: "ok" });
+});
+
 app.post("/job", async (req, res) => {
+  const authorizationHeader = req.headers.authorization || "";
+  if (allowedKeys.indexOf(authorizationHeader) === -1) {
+    return res.status(401).send({ error: "Unauthorized" });
+  }
+
   try {
     const { shape, fileIds } = req.body;
 
@@ -193,7 +211,7 @@ app.post("/job", async (req, res) => {
     await processJob(record.data[0].id);
   } catch (e) {
     console.error(e);
-    res.status(500).send({ error: "Failed to create job." });
+    res.status(500).send({ error: e.message });
   }
 });
 
