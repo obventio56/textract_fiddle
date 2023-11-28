@@ -14,6 +14,11 @@ import axios from "axios";
 import { readFileSync } from "fs";
 import { ComputerVisionClient } from "@azure/cognitiveservices-computervision";
 import { ApiKeyCredentials } from "@azure/ms-rest-js";
+import dotenv from "dotenv";
+dotenv.config();
+
+
+
 const client = new TextractClient({ maxAttempts: 3 });
 const BUCKET_NAME = "unstructured-api-images";
 
